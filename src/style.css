@@ -1,0 +1,426 @@
+/* 四色地図デモの見た目。明暗どちらの OS テーマでも読めるよう色は変数で管理する。 */
+:root {
+  --bg: #f4f3ef;
+  --map-outside: #f4f3ef;
+  --fg: #1f2328;
+  --muted: #646b73;
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(0, 0, 0, 0.12);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  --control-bg: #ffffff;
+  --control-border: #c9ccd1;
+  --control-hover: #eef0f3;
+  --accent: #2f6db5;
+  --accent-fg: #ffffff;
+  --danger: #c62828;
+  --brush: rgba(20, 20, 20, 0.85);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1d21;
+    --map-outside: #1b1d21;
+    --fg: #e6e8eb;
+    --muted: #9aa1a9;
+    --panel-bg: rgba(32, 35, 40, 0.92);
+    --panel-border: rgba(255, 255, 255, 0.12);
+    --shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+    --control-bg: #2a2e34;
+    --control-border: #464c55;
+    --control-hover: #343941;
+    --accent: #5b9be0;
+    --accent-fg: #0d1117;
+    --danger: #ff6b6b;
+    --brush: rgba(255, 255, 255, 0.9);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#brush-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: none;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--brush);
+  box-shadow: 0 0 0 1px rgba(127, 127, 127, 0.35);
+  will-change: transform;
+}
+
+/* ---- パネル共通 ---- */
+.panel {
+  position: fixed;
+  z-index: 10;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  max-height: calc(100vh - 20px);
+  overflow: auto;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+}
+
+.panel-head h1,
+.panel-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.panel.collapsed .panel-body {
+  display: none;
+}
+
+#panel {
+  top: 10px;
+  left: 10px;
+  width: 260px;
+}
+
+.panel-body {
+  padding: 0 12px 10px;
+}
+
+.sec {
+  border-top: 1px solid var(--panel-border);
+  padding: 8px 0 6px;
+}
+
+.sec > summary,
+.sec > h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: default;
+}
+
+.sec > summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+details.sec:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.row > label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+input[type="number"],
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  padding: 2px 5px;
+  height: 26px;
+}
+
+input[type="number"] {
+  width: 104px;
+  text-align: right;
+}
+
+#seed {
+  width: 96px;
+}
+
+select {
+  max-width: 140px;
+}
+
+input[type="range"] {
+  width: 110px;
+  accent-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+output {
+  min-width: 2.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  min-height: 26px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--control-hover);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button.primary,
+button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+button.primary:hover:not(:disabled),
+button.active:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+button.wide {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.icon-btn {
+  min-width: 26px;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.presets {
+  display: flex;
+  gap: 3px;
+  margin: 2px 0 6px;
+}
+
+.presets button {
+  flex: 1;
+  padding: 2px 0;
+  min-height: 22px;
+  font-size: 12px;
+}
+
+.tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.tools button {
+  padding: 3px 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tools button[data-tool="pan"] {
+  grid-column: 1 / -1;
+}
+
+.btn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.btn-row button {
+  flex: 1;
+}
+
+.about p {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ---- 統計パネル ---- */
+#stats {
+  top: 10px;
+  right: 10px;
+  width: 270px;
+}
+
+dl.panel-body dt small {
+  font-size: 11px;
+}
+
+#stats dl,
+dl.panel-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  margin: 0;
+  padding-top: 2px;
+}
+
+dl.panel-body dt {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+dl.panel-body dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+dd.warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.busy[hidden] {
+  display: none;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--control-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- 状態表示・進行状況 ---- */
+#status {
+  position: fixed;
+  z-index: 11;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 40px);
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+#status.error {
+  color: var(--danger);
+  pointer-events: auto;
+}
+
+#status[hidden],
+#progress[hidden] {
+  display: none;
+}
+
+#progress {
+  position: fixed;
+  z-index: 12;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  #panel {
+    width: min(260px, calc(100vw - 20px));
+  }
+  #stats {
+    top: auto;
+    bottom: 10px;
+    right: 10px;
+    width: min(240px, calc(100vw - 20px));
+  }
+}

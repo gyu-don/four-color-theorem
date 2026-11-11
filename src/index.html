@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>四色地図 — 近線形時間の4彩色</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="map" aria-label="地図"></canvas>
+  <div id="brush-cursor" aria-hidden="true"></div>
+</div>
+
+<aside id="panel" class="panel">
+  <header class="panel-head">
+    <h1>四色地図</h1>
+    <button type="button" class="icon-btn" id="panel-toggle" title="パネルを畳む" aria-expanded="true">−</button>
+  </header>
+  <div class="panel-body">
+    <details class="sec" id="sec-generate" open>
+      <summary>生成</summary>
+      <div class="row">
+        <label for="num-cells">セル数</label>
+        <input type="number" id="num-cells" min="100" max="2000000" step="1000" value="200000">
+      </div>
+      <div class="presets" id="presets">
+        <button type="button" data-n="10000">1万</button>
+        <button type="button" data-n="100000">10万</button>
+        <button type="button" data-n="500000">50万</button>
+        <button type="button" data-n="1000000">100万</button>
+        <button type="button" data-n="2000000">200万</button>
+      </div>
+      <div class="row">
+        <label for="distribution">分布</label>
+        <select id="distribution">
+          <option value="uniform">一様ランダム</option>
+          <option value="jitter">ゆらぎ格子</option>
+          <option value="hex">ほぼ正六角格子</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="cells-per-region">1領域あたりのセル数</label>
+        <select id="cells-per-region">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="64">64</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="seed">シード</label>
+        <span class="inline">
+          <input type="number" id="seed" min="0" max="4294967295" step="1" value="1">
+          <button type="button" class="icon-btn" id="seed-random" title="シードをランダムに選ぶ">🎲</button>
+        </span>
+      </div>
+      <button type="button" class="primary wide" id="generate">地図を生成</button>
+    </details>
+
+    <section class="sec">
+      <h2>ツール</h2>
+      <div class="tools" id="tools" role="radiogroup" aria-label="ツール">
+        <button type="button" data-tool="pan" title="移動 (H)&#10;右ドラッグ・中ドラッグ・Space を押しながらのドラッグでも移動できます">移動</button>
+        <button type="button" data-tool="expand" title="領域を広げる (B)&#10;押した領域のラベルでブラシ内のセルを塗ります">領域を広げる</button>
+        <button type="button" data-tool="paint" title="新しい領域を描く (N)&#10;新しいラベルでブラシ内のセルを塗ります">新しい領域を描く</button>
+        <button type="button" data-tool="merge" title="結合 (M)&#10;領域をクリックし、続けて別の領域をクリックすると 1 つにまとめます">結合</button>
+        <button type="button" data-tool="split" title="分割 (S)&#10;クリックした点を通るランダムな直線で領域を 2 つに分けます">分割</button>
+      </div>
+      <div class="row">
+        <label for="brush-radius">ブラシ半径</label>
+        <span class="inline">
+          <input type="range" id="brush-radius" min="2" max="120" step="1" value="18" title="ブラシ半径 ([ と ] でも変更できます)">
+          <output id="brush-radius-out" for="brush-radius">18</output>
+        </span>
+      </div>
+      <div class="btn-row">
+        <button type="button" id="undo" title="元に戻す (Ctrl+Z)" disabled>元に戻す</button>
+        <button type="button" id="redo" title="やり直す (Ctrl+Shift+Z / Ctrl+Y)" disabled>やり直す</button>
+        <button type="button" id="fit" title="地図全体を表示 (F)">全体表示</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>彩色</h2>
+      <div class="row">
+        <label for="kempe-mode">Kempe モード</label>
+        <select id="kempe-mode">
+          <option value="greedy" selected>貪欲 (既定)</option>
+          <option value="random">ランダム (論文3.1節)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="deg4-mode" title="次数 4 の頂点(4 つの領域に囲まれた領域)の処理方法">次数4の頂点</label>
+        <select id="deg4-mode">
+          <option value="identify" selected>同一視 (既定)</option>
+          <option value="kempe">Kempe 変更のみ</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="palette">配色</label>
+        <select id="palette"></select>
+      </div>
+      <div class="row">
+        <label for="show-sites">サイトを点で表示</label>
+        <input type="checkbox" id="show-sites">
+      </div>
+      <button type="button" class="wide" id="recolor" title="今のラベルでもう一度彩色する (R)">再彩色</button>
+    </section>
+
+    <details class="sec about" id="about">
+      <summary>このデモについて</summary>
+      <p>
+        地図の各領域を、隣り合う領域が同じ色にならないように 4 色で塗り分けています。
+        使っているのは Inoue, Kawarabayashi, Miyashita, Mohar, Thomassen, Thorup による
+        「The Four Color Theorem with Linearly Many Reducible Configurations and Near-Linear Time Coloring」
+        (arXiv:2603.24880, FOCS 2026 最優秀論文賞) のアルゴリズムです。
+      </p>
+      <p>
+        平面グラフの中から、互いに接しない可約配置(8202 個からなる集合 𝒟 のもの)を頂点数に比例する個数だけ見つけ、
+        それらをまとめて取り除いて残りを再帰的に彩色します。その後、O(log n) 回の大域的な Kempe 変更によって、
+        取り除いた配置に色を戻します。全体の計算時間は、従来の O(n²) に対して O(n log n) です。
+      </p>
+      <p>
+        次数 4 の頂点は、既定では論文 13 節の方法(向かい合う隣接 2 領域を同一視して縮約)で処理し、
+        Kempe 変更を省いています。「Kempe 変更のみ」を選ぶと、論文 3.1 節のとおり次数 4 の頂点も
+        可約配置として扱います。長さ 5 の障害閉路の処理は実装しておらず、配置が見つからない場合は
+        総当たりで塗ります(統計の「フォールバック頂点数」。通常は 0)。
+      </p>
+      <p class="muted">
+        操作: ホイールでズーム、右ドラッグ・中ドラッグ・Space+ドラッグで移動。
+        Ctrl+Z で元に戻す、Ctrl+Shift+Z / Ctrl+Y でやり直す。
+      </p>
+    </details>
+  </div>
+</aside>
+
+<aside id="stats" class="panel stats">
+  <header class="panel-head">
+    <h2>統計</h2>
+    <span class="busy" id="busy" hidden><span class="spinner" aria-hidden="true"></span>彩色中…</span>
+    <button type="button" class="icon-btn" id="stats-toggle" title="統計を畳む" aria-expanded="true">−</button>
+  </header>
+  <dl class="panel-body" id="stats-body">
+    <dt>セル数</dt><dd id="st-cells">–</dd>
+    <dt>領域数</dt><dd id="st-regions">–</dd>
+    <dt>地図生成時間</dt><dd id="st-gen">–</dd>
+    <dt>彩色時間</dt><dd id="st-solve">–</dd>
+    <dt>合計</dt><dd id="st-total">–</dd>
+    <dt>レベル数</dt><dd id="st-levels">–</dd>
+    <dt>使用した可約配置<br><small>次数3 / 次数4 / 𝒟</small></dt><dd id="st-configs">–</dd>
+    <dt>異なる𝒟の種類数</dt><dd id="st-distinct">–</dd>
+    <dt>次数4のうち同一視</dt><dd id="st-obstr">–</dd>
+    <dt>Kempeパス数</dt><dd id="st-kempe">–</dd>
+    <dt>入れ替え頂点数</dt><dd id="st-flipped">–</dd>
+    <dt>フォールバック頂点数</dt><dd id="st-fallback">–</dd>
+  </dl>
+</aside>
+
+<div id="status" role="status" aria-live="polite" hidden></div>
+<div id="progress" hidden><span class="spinner" aria-hidden="true"></span><span id="progress-text">準備中…</span></div>
+
+<script type="module" src="main.ts"></script>
+</body>
+</html>
